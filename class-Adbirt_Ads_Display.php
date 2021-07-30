@@ -91,8 +91,6 @@ class Adbirt_Ads_Display
 
         remove_menu_page($menu_slug);
 
-        // $this->getCategories();
-
         return true;
 
     }
@@ -187,8 +185,6 @@ class Adbirt_Ads_Display
     public function api_endpoint(WP_REST_Request $req)
     {
         global $default_config;
-
-        $this->getCategories();
 
         if (!isset($config['categories']) || !is_array($config['categories'])) {
             $config['categories'] = $default_config['categories'];
@@ -741,9 +737,10 @@ _e('Adbirt Ads Display', 'adbirt-ads-display');
 
                 $index = 0;
 
-                $merged_array = array_merge($this->getCategories(), $ads);
+                // $merged_array = array_merge($this->getCategories(), $ads);
 
-                foreach ($merged_array as $ad) {
+                foreach ($ads as $ad) {
+                    // foreach ($merged_array as $ad) {
                     $_category = ($ad['category'] == '-- Select a Category --' ? 'no category' : ($ad['category'] ?? null)) ?? 'no category';
                     ?>
 
@@ -769,6 +766,7 @@ _e('Adbirt Ads Display', 'adbirt-ads-display');
                             <?php } else {?>
 
                                 <tr>
+                                    <td>Nothing yet</td>
                                     <td>Nothing yet</td>
                                     <td>Nothing yet</td>
                                     <td>Nothing yet</td>
