@@ -1,4 +1,5 @@
 <?php
+
 /**
  * @package adbirt-ads-display
  */
@@ -29,7 +30,7 @@ $default_config = array(
         $default_ad,
     ),
     'categories' => array("beauty and jewelry", "recruitment agencies", "finance", "health science", "marketing, sales and service", "education and training", "hospitality and tourism", "information technology", "admin, human resources", "arts, media, communications", "building construction", "hotel, restaurant", "computer, information", "digital products", "ebooks", "software", "engineering", "home appliances"),
-    'version' => '1.2.0',
+    'version' => '1.4.0',
 );
 
 /**
@@ -73,15 +74,12 @@ class Adbirt_Ads_Display
             $config = $default_config;
         }
 
-        $config['categories'] = array();
-
         $config['version'] = '';
         $config['version'] = $default_config['version'];
 
         update_option('adbirt_ads_display', json_encode($config));
 
         return true;
-
     }
 
     public function deactivate()
@@ -92,25 +90,29 @@ class Adbirt_Ads_Display
         remove_menu_page($menu_slug);
 
         return true;
-
     }
 
     public function getCategories()
     {
-        global $default_config;
-        $config = json_decode(get_option('adbirt_ads_display', json_encode($default_config)), true);
+        // global $default_config;
+        // $config = json_decode(get_option('adbirt_ads_display', json_encode($default_config)), true);
 
-        $raw_categories = json_decode(file_get_contents('https://adbirt.com/campaigns/get-campaign-categories-as-json'), true);
-        $categories = array();
+        // $raw_categories = json_decode(file_get_contents('https://adbirt.com/campaigns/get-campaign-categories-as-json'), true);
+        // $categories = array();
 
-        foreach ($raw_categories as $category) {
-            array_push($categories, $category['category_name']);
-        }
+        // foreach ($raw_categories as $category) {
+        //     array_push($categories, $category['category_name']);
+        // }
 
-        $config['categories'] = $categories;
-        update_option('adbirt_ads_display', json_encode($config));
+        // $config['categories'] = $categories;
+        // update_option('adbirt_ads_display', json_encode($config));
 
-        return $categories;
+        // return $categories;
+
+        return json_decode(
+            file_get_contents('https://adbirt.com/campaigns/get-campaign-categories-as-json'),
+            true
+        );
     }
 
     public function register_css_and_js()
@@ -155,7 +157,6 @@ class Adbirt_Ads_Display
             'callback' => array($this, 'add_category_endpoint'),
             'permission_callback' => '__return_true',
         ));
-
     }
 
     /**
@@ -241,7 +242,6 @@ class Adbirt_Ads_Display
         update_option('adbirt_ads_display', json_encode($config));
 
         return rest_ensure_response($new_campaign['code']);
-
     }
 
     /**
@@ -283,7 +283,6 @@ class Adbirt_Ads_Display
         // }
 
         return $links;
-
     }
 
     /**
@@ -297,7 +296,7 @@ class Adbirt_Ads_Display
         $attrs = shortcode_atts(
             array(
                 'name' => '',
-                'interval' => '5',
+                'interval' => '10',
                 'category' => '',
             ),
             $attributes
@@ -315,78 +314,95 @@ class Adbirt_Ads_Display
         if ($name === '' && is_numeric($interval)) {
 
             ob_start();
-            ?>
-                <span id="<?php echo $local_id; ?>">
+?>
+
+            <span id="<?php echo $local_id; ?>">
+                <style id="<?php echo $local_id; ?>_style">
+                    span#<?php echo $local_id; ?>>a {
+                        display: none;
+                        visibility: hidden;
+                    }
+                </style>
                 <?php foreach ($ads as $ad) {
-                if ($ad['status'] === 'Published') {
-                    if ($category !== '') {
-                        if ($ad['category'] === $category) {
+                    if ($ad['status'] === 'Published') {
+                        if ($category !== '') {
+                            if (strtolower($ad['category']) === strtolower($category)) {
+                                $_local_markup = $ad['code'];
+                                echo $_local_markup;
+                            } else {
+                                break;
+                            }
+                        } else {
                             $_local_markup = $ad['code'];
                             echo $_local_markup;
-                        } else {
-                            break;
                         }
-                    } else {
-                        $_local_markup = $ad['code'];
-                        echo $_local_markup;
                     }
-                }}?>
-                </span>
+                } ?>
                 <script id="<?php echo $local_id; ?>_script">
-                    const showAds = async () => {
-                        const id = `<?php echo $local_id; ?>`.trim();
-                        const ads = <?php echo json_encode($ads) ?>;
-                        const interval = <?php echo $interval; ?>;
-                        const category = `<?php echo $category; ?>`;
-
-                        const selector = `span#<?php echo $local_id; ?> > a`;
-                        const ad_elems = Array.from(document.querySelectorAll(selector));
+                    (() => {
 
                         const widths = [];
                         const heights = [];
-                        ad_elems.forEach(elem => {
-                            widths.push(elem.style.width);
-                            heights.push(elem.style.height);
-                        });
 
-                        let index = 0;
-                        while(true){
-                            const ad = ads[index];
-                            const ad_elem = ad_elems[index];
+                        const showAds = async () => {
+                            const id = `<?php echo $local_id; ?>`.trim();
+                            const ads = <?php echo json_encode($ads) ?>;
+                            const interval = <?php echo $interval; ?>;
+                            const category = `<?php echo $category; ?>`;
 
-                            ad_elems.forEach(elem => {
-                                elem.style.visibility = 'hidden';
-                                elem.style.display = 'none';
-                                elem.style.width = '0px';
-                                elem.style.height = '0px';
-                            });
+                            let index = 0;
+                            while (true) {
 
-                            ad_elem.style.visibility = 'visible';
-                            ad_elem.style.display = 'block';
-                            ad_elem.style.width = widths[index];
-                            ad_elem.style.height = heights[index];
+                                const selector = `span#<?php echo $local_id; ?> > a.ubm_banner`;
+                                const ad_elems = Array.from(document.querySelectorAll(selector));
 
-                            await new Promise(resolve => setTimeout(resolve, interval * 1000));
+                                if (ad_elems.length === 0) {
+                                    await new Promise(resolve => setTimeout(resolve, 0.5 * 1000));
+                                    continue;
+                                }
 
-                            if ((index + 1) == ads.length) {
+                                if ((widths.length < ads.length) && (heights.length < ads.length)) {
+                                    ad_elems.forEach(elem => {
+                                        widths.push(elem.style.width);
+                                        heights.push(elem.style.height);
+                                    });
+                                }
+
+                                console.log('showing ad at index: ', index);
+                                const ad = ads[index];
+                                const ad_elem = ad_elems[index];
+
+                                ad_elems.forEach(elem => {
+                                    elem.style.visibility = 'hidden';
+                                    elem.style.display = 'none';
+                                    elem.style.width = '0px';
+                                    elem.style.height = '0px';
+                                });
+
+                                ad_elem.style.visibility = 'visible';
+                                ad_elem.style.display = 'block';
+                                ad_elem.style.width = widths[index];
+                                ad_elem.style.height = heights[index];
+
+                                console.log('current ad element is ', ad_elem);
+
+                                await new Promise(resolve => setTimeout(resolve, interval * 1000));
+
+                                if ((index + 1) == ads.length) {
                                     index = 0;
-                            } else {
-                                ++index;
+                                } else {
+                                    ++index;
+                                }
                             }
-                        }
-                    };
+                        };
 
-                    setTimeout(() => showAds(), 1000);
+                        setTimeout(() => showAds(), 1000);
+                    })();
                 </script>
+            </span>
 
-                <style id="<?php echo $local_id; ?>_style">
-                    span#<?php echo $local_id; ?> > a {
-                        display: none;
-                    }
-                </style>
             <?php
-$markup = ob_get_clean();
-
+            $markup = ob_get_clean();
         } else if ($name !== '') {
             $single_ad = array();
 
@@ -405,16 +421,14 @@ $markup = ob_get_clean();
             if (isset($single_ad['status']) && ($single_ad['status'] === 'Published')) {
                 echo $single_ad['code'];
             } else {
-                ?>
+            ?>
                 <!-- Draft: <?php echo $single_ad['code']; ?> -->
-                <?php
-}
+        <?php
+            }
             $markup = ob_get_clean();
-
         }
 
         return $markup;
-
     }
 
     public function admin_sidebar_item()
@@ -446,11 +460,11 @@ $markup = ob_get_clean();
         );
 
         $ads = $config['ads'];
-        $categories = $config['categories'];
+        $categories = /* $this->getCategories() */ $config['categories'];
 
         ob_start();
         ?>
-            <div class="wrap">
+        <div class="wrap">
 
             <script>
                 (() => {
@@ -463,11 +477,11 @@ $markup = ob_get_clean();
 
                     window.aadCopyToClipboard = async (event) => {
                         event.preventDefault();
-                        try{
+                        try {
                             const text = event.target.innerHTML.trim();
                             await navigator.clipboard.writeText(text);
                             alert('Successfully copied to clipboard');
-                        } catch (error){
+                        } catch (error) {
                             console.error(error);
                             alert('Couldn\'t copy!');
                         }
@@ -500,7 +514,7 @@ $markup = ob_get_clean();
 
                     window.deleteCampaign = async (event, campaignName, index) => {
 
-                        const shoultDelete = confirm('Are you sure you want to delete?');
+                        const shoultDelete = confirm(`Are you sure you want to delete ${campaignName}?`);
 
                         if (shoultDelete) {
 
@@ -611,159 +625,166 @@ $markup = ob_get_clean();
             </script>
 
             <?php
-if (isset($_GET['shortcode']) && isset($_GET['fromUrl'])) {
+            if (isset($_GET['shortcode']) && isset($_GET['fromUrl'])) {
             ?>
 
-            <script>
-                (() => {
-                    const shortcode = url.searchParams.get('shortcode');
-                    const fromUrl = url.searchParams.get('fromUrl');
-                })();
-            </script>
+                <script>
+                    (() => {
+                        const shortcode = url.searchParams.get('shortcode');
+                        const fromUrl = url.searchParams.get('fromUrl');
+                    })();
+                </script>
 
-            <br>
-            <br>
-            <br>
-
-            <div id="aad_success">
                 <br>
                 <br>
-                <strong id="success-message">
-                Submitted successfully
-                </strong>
-                <p>Copy the shortcode below and paste it where you want the campaign to show</p>
-                <p id="aad_shortcode" onclick="aadCopyToClipboard(event)">
-                    <b>
-                        <?php $shortcode = urldecode($_GET['shortcode']);
-            $decoded_shortcode = str_replace('\\', '', $shortcode);
-            echo $decoded_shortcode;?>
-                    </b>
-                </p>
                 <br>
-                <a href="<?php echo urldecode($_GET['fromUrl']); ?>">Go back</a>
-                <br>
-                <br>
-            </div>
 
-            <style>
-                html, body {
-                    background-color: #ecedef;
-                }
+                <div id="aad_success">
+                    <br>
+                    <br>
+                    <strong id="success-message">
+                        Submitted successfully
+                    </strong>
+                    <p>Copy the shortcode below and paste it where you want the campaign to show</p>
+                    <p id="aad_shortcode" onclick="aadCopyToClipboard(event)">
+                        <b>
+                            <?php $shortcode = urldecode($_GET['shortcode']);
+                            $decoded_shortcode = str_replace('\\', '', $shortcode);
+                            echo $decoded_shortcode; ?>
+                        </b>
+                    </p>
+                    <br>
+                    <a href="<?php echo urldecode($_GET['fromUrl']); ?>">Go back</a>
+                    <br>
+                    <br>
+                </div>
 
-                .wrap {
-                    width: 100% !important;
-                    height: 100%;
-                    margin: 0;
-                    padding: 0;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    flex-direction: column;
-                    background-color: #ecedef;
-                }
+                <style>
+                    html,
+                    body {
+                        background-color: #ecedef;
+                    }
 
-                #aad_shortcode {
-                    cursor: pointer;
-                }
+                    .wrap {
+                        width: 100% !important;
+                        height: 100%;
+                        margin: 0;
+                        padding: 0;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        flex-direction: column;
+                        background-color: #ecedef;
+                    }
 
-                #aad_success {
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: center;
-                    border-radius: 30px;
-                    box-shadow: 0px 0px 3px 3px;
-                    width: calc(100% - 20px);
-                    font-size: 18px;
-                    color: #fff;
-                    max-width: 650px;
-                    height: 50%;
-                    background-color: rgb(77, 73, 73);
-                }
+                    #aad_shortcode {
+                        cursor: pointer;
+                    }
 
-                #aad_success strong,
-                #aad_success a {
-                    font-weight: 900;
-                }
+                    #aad_success {
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        justify-content: center;
+                        border-radius: 30px;
+                        box-shadow: 0px 0px 3px 3px;
+                        width: calc(100% - 20px);
+                        font-size: 18px;
+                        color: #fff;
+                        max-width: 650px;
+                        height: 50%;
+                        background-color: rgb(77, 73, 73);
+                    }
 
-                #aad_success a {
-                    text-decoration: underline;
-                    text-decoration-color: black;
-                    color: rgb(45, 171, 209);
-                    font-size: 18px;
-                }
+                    #aad_success strong,
+                    #aad_success a {
+                        font-weight: 900;
+                    }
 
-                #aad_success strong {
-                    color: #fff;
-                    font-size: 20px;
-                }
-            </style>
+                    #aad_success a {
+                        text-decoration: underline;
+                        text-decoration-color: black;
+                        color: rgb(45, 171, 209);
+                        font-size: 18px;
+                    }
+
+                    #aad_success strong {
+                        color: #fff;
+                        font-size: 20px;
+                    }
+                </style>
 
             <?php
-} else {
+            } else {
             ?>
 
+                <br>
+                <br>
                 <center>
                     <h1 id="aad-header">
                         <u>
                             <?php
-_e('Adbirt Ads Display', 'adbirt-ads-display');
-            echo ' - ' . $config['version'];
-            ?>
+                            _e('Adbirt Ads Display', 'adbirt-ads-display');
+                            echo ' - ' . $config['version'];
+                            ?>
                         </u>
                     </h1>
                 </center>
                 <br />
 
                 <center>
-                    <table id="adbirt-ads-display-list-holder">
+                    <h2 class="screen-reader-text">Plugins list</h2>
+                    <table id="adbirt-ads-display-list-holder" class="wp-list-table widefat fixed striped table-view-list">
                         <thead>
                             <tr>
-                                <th>Campaign Name</th>
-                                <th>Campaign Code</th>
-                                <th>Campaign Category</th>
-                                <th>Publicity Status</th>
-                                <th>Shortcode</th>
-                                <th>Edit</th>
-                                <th>Delete</th>
+                                <th scope="col">Campaign Name</th>
+                                <th scope="col">Campaign Code</th>
+                                <th scope="col">Campaign Category</th>
+                                <th scope="col">Publicity Status</th>
+                                <th scope="col">Shortcode</th>
+                                <th scope="col">Edit</th>
+                                <th scope="col">Delete</th>
                             </tr>
                         </thead>
 
-                        <tbody id="adbirt-ads-display-list">
+                        <tbody id="adbirt-ads-display-list" class="the-list">
 
-                            <?php if (sizeof($ads) > 0) {?>
+                            <?php if (sizeof($ads) > 0) { ?>
                                 <!-- loop through all the ads -->
                                 <?php
 
-                $index = 0;
+                                $index = 0;
 
-                // $merged_array = array_merge($this->getCategories(), $ads);
+                                foreach ($ads as $ad) {
+                                    // foreach ($merged_array as $ad) {
+                                    $_category = ($ad['category'] == '-- Select a Category --' ? 'no category' : (ucfirst($ad['category']) ?? null)) ?? 'no category';
+                                ?>
 
-                foreach ($ads as $ad) {
-                    // foreach ($merged_array as $ad) {
-                    $_category = ($ad['category'] == '-- Select a Category --' ? 'no category' : ($ad['category'] ?? null)) ?? 'no category';
-                    ?>
-
-                                    <tr>
-                                        <th class="aad_campaign-name" > <?php echo $ad['name']; ?> </th>
-                                        <th class="aad_campaign-code"> <?php echo isset($ad['code']) ? esc_html($ad['code']) : 'no code'; ?> </th>
+                                    <tr class="<?php echo 'level-' . $index; ?>  <?php echo $ad['status'] === 'Published' ? 'active' : '' ?>">
+                                        <th class="aad_campaign-name"> <?php echo $ad['name']; ?> </th>
+                                        <th class="aad_campaign-code">
+                                            <code>
+                                                <?php echo isset($ad['code']) ? esc_html($ad['code']) : 'no code'; ?>
+                                            </code>
+                                        </th>
                                         <th class="aad_campaign-category"> <?php echo $_category; ?> </th>
                                         <th class="aad_campaign-status"> <?php echo isset($ad['status']) ? $ad['status'] : 'Draft'; ?> </th>
-                                        <th class="aad_campaign-shortcode" title="Click to copy shortcode"
-                                            style="cursor: pointer;"
-                                            onclick="window.aadCopyToClipboard(event)"> <?php echo isset($ad['id']) ? "[adbirt_ads_display name='" . $ad['name'] . "']" : 'no shortcode'; ?> </th>
+                                        <th class="aad_campaign-shortcode" title="Click to copy shortcode for '<?php echo $ad['name']; ?>'" style="cursor: pointer;" onclick="window.aadCopyToClipboard(event)">
+                                            <code>
+                                                <?php echo isset($ad['id']) ? "[adbirt_ads_display name='" . $ad['name'] . "']" : 'no shortcode'; ?>
+                                            </code>
+                                        </th>
                                         <th class="aad_campaign-edit"> <button id="aad-edit-campaign-button" onclick="window.editCampaign(event, `<?php echo $ad['name']; ?>`, `<?php echo $index; ?>`)">Edit</button> </th>
                                         <th class="aad_campaign-delete"> <button id="aad-delete-campaign-button" onclick="window.deleteCampaign(event, `<?php echo $ad['name']; ?>`, `<?php echo $index; ?>`)">Delete</button> </th>
                                     </tr>
 
                                 <?php
 
-                    $index++;
-
-                }?>
+                                    $index++;
+                                } ?>
                                 <!-- end loop -->
 
-                            <?php } else {?>
+                            <?php } else { ?>
 
                                 <tr>
                                     <td>Nothing yet</td>
@@ -775,9 +796,21 @@ _e('Adbirt Ads Display', 'adbirt-ads-display');
                                     <td>Nothing yet</td>
                                 </tr>
 
-                            <?php }?>
+                            <?php } ?>
 
                         </tbody>
+
+                        <tfoot>
+                            <tr>
+                                <th scope="col">Campaign Name</th>
+                                <th scope="col">Campaign Code</th>
+                                <th scope="col">Campaign Category</th>
+                                <th scope="col">Publicity Status</th>
+                                <th scope="col">Shortcode</th>
+                                <th scope="col">Edit</th>
+                                <th scope="col">Delete</th>
+                            </tr>
+                        </tfoot>
                     </table>
                 </center>
                 <br />
@@ -786,47 +819,47 @@ _e('Adbirt Ads Display', 'adbirt-ads-display');
                 <center>
                     <h2 class="aad-header" id="aad-add-new-campaign">
                         <u>
-                            <?php _e('Add new campaign', 'adbirt-ads-display')?>
+                            <?php _e('Add new campaign', 'adbirt-ads-display') ?>
                         </u>
                     </h2>
+                    <br>
+                    <br>
+                    <br>
                     <h3 class="aad-header" id="aad-add-new-campaign">
                         <u>
-                            <?php _e('Note: Saving a campaign with the same name as an existing campaign will edit th exising one', 'adbirt-ads-display')?>
+                            <?php _e('Note: Saving a campaign with the same name as an existing campaign will edit th exising one', 'adbirt-ads-display') ?>
                         </u>
                     </h3>
+                    <br>
+                    <br>
+                    <br>
 
                     <form method="post" id="adbirt-ads-display-endpoint-form" onsubmit="return false">
 
-                        <div
-                            style="display: none; padding: 8px; background: green; color: white;"
-                            id="adbirt-ads-display-success"
-                            >
-                            <?php _e('Submitted successfully', 'adbirt-ads-display');?>
+                        <div style="display: none; padding: 8px; background: green; color: white;" id="adbirt-ads-display-success">
+                            <?php _e('Submitted successfully', 'adbirt-ads-display'); ?>
                             <span id="aad_ad_placeholder"></span>
                         </div>
-                        <div
-                            style="display: none; padding: 8px; background: green; color: white;"
-                            id="adbirt-ads-display-loading"
-                            >
-                            <?php _e('Loading...', 'adbirt-ads-display');?>
+                        <div style="display: none; padding: 8px; background: green; color: white;" id="adbirt-ads-display-loading">
+                            <?php _e('Loading...', 'adbirt-ads-display'); ?>
                         </div>
 
 
-                        <label for="adbirt-ads-display-ad-name"> <?php _e('Campaign name', 'adbirt-ads-display')?> </label>
+                        <label for="adbirt-ads-display-ad-name"> <?php _e('Campaign name', 'adbirt-ads-display') ?> </label>
                         <br />
                         <input type="text" name="ad_name" value="" id="adbirt-ads-display-ad-name" required />
                         <br />
                         <br />
 
-                        <label for="adbirt-ads-display-ad-category"> <?php _e('Campaign category', 'adbirt-ads-display')?> </label>
+                        <label for="adbirt-ads-display-ad-category"> <?php _e('Campaign category', 'adbirt-ads-display') ?> </label>
                         <br />
                         <select name="ad_category" value="" id="adbirt-ads-display-ad-category" required>
                             <option selected disabled value="-- Select a Category --">-- Select a Category --</option>
-                            <?php foreach ($categories as $index => $category) {?>
+                            <?php foreach ($categories as $index => $category) { ?>
                                 <option value="<?php echo $category; ?>">
-                                    <?php echo $category; ?>
+                                    <?php echo ucfirst($category); ?>
                                 </option>
-                            <?php }?>
+                            <?php } ?>
                         </select>
                         <small style="display: block !important; text-align: left !important;">
                             <a href="#" onclick="window.aad_addCategory(event)">Add new category</a>
@@ -835,13 +868,13 @@ _e('Adbirt Ads Display', 'adbirt-ads-display');
                         <br />
 
                         <label for="adbirt-ads-display-ad-status">
-                            <?php _e('Publish immeiately', 'adbirt-ads-display')?>
+                            <?php _e('Publish immeiately', 'adbirt-ads-display') ?>
                             <input style="width: 20px !important; height: 20px !important; display: inline; float: left !important;" name="ad_status" id="adbirt-ads-display-ad-code" type="checkbox" checked />
                         </label>
                         <br />
                         <br />
 
-                        <label for="adbirt-ads-display-ad-code"> <?php _e('Campaign code', 'adbirt-ads-display')?> </label>
+                        <label for="adbirt-ads-display-ad-code"> <?php _e('Campaign code', 'adbirt-ads-display') ?> </label>
                         <br />
                         <textarea style="height: 160px;" rows="10" name="ad_code" value="" id="adbirt-ads-display-ad-code" required></textarea>
                         <br />
@@ -856,15 +889,15 @@ _e('Adbirt Ads Display', 'adbirt-ads-display');
                 </center>
 
                 <style>
-                    :root{
+                    :root {
                         --aad-primary-color: #bc6a44;
                     }
 
-                    *{
+                    * {
                         scroll-behavior: smooth !important;
                     }
 
-                    #adbirt-ads-display-list-holder{
+                    #adbirt-ads-display-list-holder {
                         max-width: 100%;
                         font-size: 16px !important;
                         overflow-y: auto;
@@ -880,15 +913,21 @@ _e('Adbirt Ads Display', 'adbirt-ads-display');
                         overflow: hidden !important;
                     }
 
-                    #adbirt-ads-display-list-holder, #adbirt-ads-display-list-holder * {
+                    #adbirt-ads-display-list-holder,
+                    #adbirt-ads-display-list-holder * {
                         transition: all .5s all;
                     }
 
                     body {
-                        background-color: var(--aad-primary-color) !important;
+                        /* background-color: var(--aad-primary-color) !important; */
+                        background: linear-gradient(to bottom, #966650aa, #db622abb, var(--aad-primary-color)), url('<?php echo WP_PLUGIN_URL; ?>/adbirt-ads-display/assets/img/background.jpg');
+                        background-size: cover;
+                        background-attachment: fixed;
+                        background-position: center;
                     }
 
-                    #aad-edit-campaign-button, #aad-delete-campaign-button {
+                    #aad-edit-campaign-button,
+                    #aad-delete-campaign-button {
                         border: .2px solid var(--aad-primary-color) !important;
                         padding: 8px !important;
                         border-radius: 4px !important;
@@ -904,16 +943,23 @@ _e('Adbirt Ads Display', 'adbirt-ads-display');
                         background-color: #7e0030 !important;
                     }
 
-                    #aad-header, .aad-header {
+                    #aad-header,
+                    .aad-header {
                         font-weight: 900 !important;
-                        color: #fff !important;
+                        color: blue !important;
+                        background-color: #fff;
+                        padding: 9px;
+                        display: inline;
+                        width: fit-content !important;
+                        margin: 8px;
+                        border-radius: 5px;
                     }
 
-                    table{
+                    table {
                         background-color: #ecedef;
                     }
 
-                    #adbirt-ads-display-endpoint-form{
+                    #adbirt-ads-display-endpoint-form {
                         width: calc(100% - 20px);
                         /* height: 300px; */
                         padding: 12px;
@@ -952,7 +998,7 @@ _e('Adbirt Ads Display', 'adbirt-ads-display');
                         height: 30px;
                     }
 
-                    #adbirt-ads-display-endpoint-form input[type=submit]{
+                    #adbirt-ads-display-endpoint-form input[type=submit] {
                         background-color: var(--aad-primary-color);
                         color: #fff;
                         font-weight: 900;
@@ -966,7 +1012,6 @@ _e('Adbirt Ads Display', 'adbirt-ads-display');
                 </style>
 
                 <script>
-
                     const namespace = 'adbirt-ads-display';
 
                     const form = document.querySelector(`#adbirt-ads-display-endpoint-form`);
@@ -986,11 +1031,11 @@ _e('Adbirt Ads Display', 'adbirt-ads-display');
                         const ad_category = document.querySelector('[name=ad_category]').value.toString().trim() || '';
                         ad_status = document.querySelector('[name=ad_status]').checked ? 'Published' : 'Draft';
 
-                        if (!ad_code && !ad_id/*  && !ad_category */) {
+                        if (!ad_code && !ad_id /*  && !ad_category */ ) {
 
                             alert(`Campaign name, category, and code must be provided.`);
 
-                        } else if (ad_name && ad_code/*  && ad_category */){
+                        } else if (ad_name && ad_code /*  && ad_category */ ) {
 
                             let isError = false;
 
@@ -1008,7 +1053,7 @@ _e('Adbirt Ads Display', 'adbirt-ads-display');
                                         ad_category,
                                         ad_status,
                                         edit: true,
-                                        index: window.aadIsEditingIndex|| false,
+                                        index: window.aadIsEditingIndex || false,
                                     })
                                 });
 
@@ -1049,23 +1094,20 @@ _e('Adbirt Ads Display', 'adbirt-ads-display');
                         }
 
                     })
-
                 </script>
 
-            </div>
+        </div>
 
-                <?php
-}
-        ?>
+    <?php
+            }
+    ?>
 
-        <?php
-$markup = ob_get_clean();
+<?php
+        $markup = ob_get_clean();
 
         echo $markup;
 
         // optional return
         return $markup;
-
     }
-
 }
