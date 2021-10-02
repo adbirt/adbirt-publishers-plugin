@@ -1,4 +1,6 @@
 === Adbirt Ads Display ===
+Plugin Name: Adbirt Ads Display
+Plugin URI: https://github.com/adbirt/adbirt-ads-display
 Contributors: adbirt
 Tags: Adbirt, Advertisment, CPC, CPA, CPM
 Requires at least: 5.0
