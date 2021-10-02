@@ -952,7 +952,7 @@ class Adbirt_Ads_Display
 
                     body {
                         /* background-color: var(--aad-primary-color) !important; */
-                        background: linear-gradient(to bottom, #966650aa, #db622abb, var(--aad-primary-color)), url('<?php echo trailingslashit(plugin_dir_path(__FILE__)); ?>assets/img/background.jpg');
+                        background: linear-gradient(to bottom, #966650aa, #db622abb, var(--aad-primary-color)), url('<?php echo trailingslashit(plugin_dir_url(__FILE__)); ?>assets/img/background.jpg');
                         background-size: cover;
                         background-attachment: fixed;
                         /* background-position: center; */
