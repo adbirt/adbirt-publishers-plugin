@@ -8,7 +8,7 @@
  *
  * @wordpress-plugin
  * Plugin Name: Adbirt Ads Display
- * Plugin URI: https://adbirt.com
+ * Plugin URI: https://github.com/adbirt/adbirt-ads-display
  * description: A plugin for managing & displaying adbirt ads on a wordpress site. See https://adbirt.com/privacy & https://adbirt.com/terms for TAC/privacy policy.
  * Version: 1.0.0
  * Tags: Adbirt, Advertisment, CPC, CPA, CPM
