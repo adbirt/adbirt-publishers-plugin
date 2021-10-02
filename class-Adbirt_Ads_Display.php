@@ -4,18 +4,10 @@
  * @package adbirt-ads-display
  */
 
-require 'class-AAD_widget.php';
 
-function generateRandomString($length = 10)
-{
-    $characters = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    $charactersLength = strlen($characters);
-    $randomString = '';
-    for ($i = 0; $i < $length; $i++) {
-        $randomString .= $characters[rand(0, $charactersLength - 1)];
-    }
-    return $randomString;
-}
+// require the widget class before anything else
+$widget_file_path = trailingslashit(plugin_dir_path(__FILE__)) . 'includes/class-AAD_widget.php';
+require $widget_file_path;
 
 $default_ad = array(
     'name' => 'Sample Campaign',
@@ -29,6 +21,7 @@ $default_config = array(
     'ads' => array(
         $default_ad,
     ),
+    // categories retrived from adbirt.com backend
     'categories' => array("beauty and jewelry", "recruitment agencies", "finance", "health science", "marketing, sales and service", "education and training", "hospitality and tourism", "information technology", "admin, human resources", "arts, media, communications", "building construction", "hotel, restaurant", "computer, information", "digital products", "ebooks", "software", "engineering", "home appliances"),
     'version' => '1.4.0',
 );
@@ -40,21 +33,54 @@ $default_config = array(
 class Adbirt_Ads_Display
 {
 
-    public $plugin_version;
+    public ?string $plugin_version = '';
 
     public function __construct()
     {
 
         add_action('rest_api_init', array($this, 'register_custom_REST_routes'));
+        add_action('widgets_init', array($this, 'load_widget'));
+        add_action('admin_menu', array($this, 'admin_sidebar_item'));
+
         register_activation_hook(__FILE__, array($this, 'activate'));
         register_deactivation_hook(__FILE__, array($this, 'deactivate'));
+
         add_filter('plugin_action_links', array($this, 'settings_hook'), 10, 1);
-        add_action('widgets_init', 'load_widget');
-        add_action('admin_menu', array($this, 'admin_sidebar_item'));
         add_filter('wp_enqueue_scripts', array($this, 'register_css_and_js'));
+
         add_shortcode('adbirt_ads_display', array($this, 'adbirt_ads_display_shortcode'));
 
         return $this;
+    }
+
+
+    /**
+     * Generates a unique random alpha-numeric string.
+     * The string is always unique because it also includes the current unix timestamp 
+     * ```php
+     * time()
+     * ```
+     */
+    public function generate_random_string($length = 5)
+    {
+        $characters = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        $charactersLength = strlen($characters);
+
+        $randomString = '';
+
+        for ($i = 0; $i < $length; $i++) {
+            $randomString .= $characters[rand(0, $charactersLength - 1)];
+        }
+
+        return $randomString . '_' . time();
+    }
+
+    /**
+     * Loads the widget
+     */
+    public function load_widget()
+    {
+        return register_widget('AAD_widget');
     }
 
     public function activate()
@@ -87,32 +113,27 @@ class Adbirt_Ads_Display
 
         $menu_slug = 'adbirt-ads-display';
 
+        /**
+         * Removes Adbirt Admin page from wp-admin menu
+         */
         remove_menu_page($menu_slug);
 
         return true;
     }
 
-    public function getCategories()
+    /**
+     * This function retrives campaign categories from adbirt.com backend
+     */
+    public function get_categories()
     {
-        // global $default_config;
-        // $config = json_decode(get_option('adbirt_ads_display', json_encode($default_config)), true);
+        $categories = array();
 
-        // $raw_categories = json_decode(file_get_contents('https://adbirt.com/campaigns/get-campaign-categories-as-json'), true);
-        // $categories = array();
+        $categories_url = 'https://adbirt.com/campaigns/get-campaign-categories-as-json';
 
-        // foreach ($raw_categories as $category) {
-        //     array_push($categories, $category['category_name']);
-        // }
+        $response = wp_safe_remote_get($categories_url);
+        $categories = $response['body'];
 
-        // $config['categories'] = $categories;
-        // update_option('adbirt_ads_display', json_encode($config));
-
-        // return $categories;
-
-        return json_decode(
-            file_get_contents('https://adbirt.com/campaigns/get-campaign-categories-as-json'),
-            true
-        );
+        return $categories;
     }
 
     public function register_css_and_js()
@@ -137,6 +158,9 @@ class Adbirt_Ads_Display
         return true;
     }
 
+    /**
+     * Register cusston HTTP REST routes for this plugin
+     */
     public function register_custom_REST_routes()
     {
 
@@ -228,6 +252,7 @@ class Adbirt_Ads_Display
                 $ads[$index]['status'] = $new_campaign['status'];
 
                 $already_added = true;
+
                 $config['ads'] = $ads;
                 break;
             }
@@ -235,6 +260,7 @@ class Adbirt_Ads_Display
 
         if (!$already_added) {
             array_push($ads, $new_campaign);
+
             $already_added = true;
             $config['ads'] = $ads;
         }
@@ -262,9 +288,11 @@ class Adbirt_Ads_Display
         $config['ads'] = $ads;
         update_option('adbirt_ads_display', json_encode($config));
 
-        wp_redirect($from);
-
-        exit(0);
+        if (wp_redirect($from)) {
+            exit(0);
+        } else {
+            return header("Location: $from");
+        }
     }
 
     public function settings_hook($links)
@@ -287,9 +315,9 @@ class Adbirt_Ads_Display
 
     /**
      * @param {array} attributes = { name: string, id: string, code: string, interval: string }
-     * @param {string} content
+     * @param {?string} content
      */
-    public function adbirt_ads_display_shortcode($attributes, $content = '')
+    public function adbirt_ads_display_shortcode($attributes = array(), $content = '')
     {
         global $default_config, $default_ad;
 
@@ -309,16 +337,16 @@ class Adbirt_Ads_Display
         $interval = isset($attrs['interval']) ? intval($attrs['interval']) : 5;
 
         $markup = '';
-        $local_id = 'aad_' . generateRandomString(5);
+        $local_id = 'aad_' . $this->generate_random_string();
 
         if ($name === '' && is_numeric($interval)) {
 
             ob_start();
 ?>
 
-            <span id="<?php echo $local_id; ?>">
-                <style id="<?php echo $local_id; ?>_style">
-                    span#<?php echo $local_id; ?>>a {
+            <span id="<?php echo esc_attr($local_id); ?>">
+                <style id="<?php echo esc_attr($local_id); ?>_style">
+                    span#<?php echo esc_html($local_id); ?>>a {
                         display: none;
                         visibility: hidden;
                     }
@@ -329,16 +357,18 @@ class Adbirt_Ads_Display
                             if (strtolower($ad['category']) === strtolower($category)) {
                                 $_local_markup = $ad['code'];
                                 echo $_local_markup;
+                                // consider ☝️
                             } else {
                                 break;
                             }
                         } else {
                             $_local_markup = $ad['code'];
                             echo $_local_markup;
+                            // consider ☝️
                         }
                     }
                 } ?>
-                <script id="<?php echo $local_id; ?>_script">
+                <script id="<?php echo esc_attr($local_id); ?>_script">
                     (() => {
 
                         const widths = [];
@@ -347,13 +377,13 @@ class Adbirt_Ads_Display
                         const showAds = async () => {
                             const id = `<?php echo $local_id; ?>`.trim();
                             const ads = <?php echo json_encode($ads) ?>;
-                            const interval = <?php echo $interval; ?>;
+                            const interval = <?php echo intval(esc_attr($interval)); ?>;
                             const category = `<?php echo $category; ?>`;
 
                             let index = 0;
                             while (true) {
 
-                                const selector = `span#<?php echo $local_id; ?> > a.ubm_banner`;
+                                const selector = `span#<?php echo esc_attr($local_id); ?> > a.ubm_banner`;
                                 const ad_elems = Array.from(document.querySelectorAll(selector));
 
                                 if (ad_elems.length === 0) {
@@ -368,7 +398,7 @@ class Adbirt_Ads_Display
                                     });
                                 }
 
-                                console.log('showing ad at index: ', index);
+                                // console.log('showing ad at index: ', index);
                                 const ad = ads[index];
                                 const ad_elem = ad_elems[index];
 
@@ -384,7 +414,7 @@ class Adbirt_Ads_Display
                                 ad_elem.style.width = widths[index];
                                 ad_elem.style.height = heights[index];
 
-                                console.log('current ad element is ', ad_elem);
+                                // console.log('current ad element is ', ad_elem);
 
                                 await new Promise(resolve => setTimeout(resolve, interval * 1000));
 
@@ -422,7 +452,9 @@ class Adbirt_Ads_Display
                 echo $single_ad['code'];
             } else {
             ?>
-                <!-- Draft: <?php echo $single_ad['code']; ?> -->
+                <!-- Draft: <?php
+                            // echo $single_ad['code'];
+                            ?> -->
         <?php
             }
             $markup = ob_get_clean();
@@ -460,7 +492,7 @@ class Adbirt_Ads_Display
         );
 
         $ads = $config['ads'];
-        $categories = /* $this->getCategories() */ $config['categories'];
+        $categories = /* $this->get_categories() */ $config['categories'];
 
         ob_start();
         ?>
@@ -648,13 +680,13 @@ class Adbirt_Ads_Display
                     <p>Copy the shortcode below and paste it where you want the campaign to show</p>
                     <p id="aad_shortcode" onclick="aadCopyToClipboard(event)">
                         <b>
-                            <?php $shortcode = urldecode($_GET['shortcode']);
+                            <?php $shortcode = urldecode(esc_url($_GET['shortcode']));
                             $decoded_shortcode = str_replace('\\', '', $shortcode);
                             echo $decoded_shortcode; ?>
                         </b>
                     </p>
                     <br>
-                    <a href="<?php echo urldecode($_GET['fromUrl']); ?>">Go back</a>
+                    <a href="<?php echo urldecode(esc_url($_GET['fromUrl'])); ?>">Go back</a>
                     <br>
                     <br>
                 </div>
@@ -920,10 +952,10 @@ class Adbirt_Ads_Display
 
                     body {
                         /* background-color: var(--aad-primary-color) !important; */
-                        background: linear-gradient(to bottom, #966650aa, #db622abb, var(--aad-primary-color)), url('<?php echo WP_PLUGIN_URL; ?>/adbirt-ads-display/assets/img/background.jpg');
+                        background: linear-gradient(to bottom, #966650aa, #db622abb, var(--aad-primary-color)), url('<?php echo trailingslashit(plugin_dir_path(__FILE__)); ?>assets/img/background.jpg');
                         background-size: cover;
                         background-attachment: fixed;
-                        background-position: center;
+                        /* background-position: center; */
                     }
 
                     #aad-edit-campaign-button,
@@ -1105,9 +1137,10 @@ class Adbirt_Ads_Display
 <?php
         $markup = ob_get_clean();
 
+        // echo the markup of the shortcode on the page
         echo $markup;
 
         // optional return
-        return $markup;
+        // return $markup;
     }
 }

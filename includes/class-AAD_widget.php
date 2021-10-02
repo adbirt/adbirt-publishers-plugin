@@ -1,4 +1,5 @@
 <?php
+
 /**
  * @package adbirt-ads-display
  */
@@ -18,7 +19,7 @@ class AAD_widget extends WP_Widget
             // Widget name will appear in UI
             __('Adbirt Ads display widget', 'adbirt-ads-display'),
             // Widget description
-            array('description' => __('Insert abirt ads in your widget area', 'adbirt-ads-display'))
+            array('description' => __('Insert Abirt ads in your widget area', 'adbirt-ads-display'))
         );
     }
 
@@ -43,7 +44,6 @@ class AAD_widget extends WP_Widget
         echo $args['after_widget'];
     }
 
-    // Creating widget Backend
     // Widget Backend
     public function form($instance)
     {
@@ -54,23 +54,18 @@ class AAD_widget extends WP_Widget
             $name = $instance['name'] = '';
         }
         // Widget admin form
-        ?>
-            <p>
-                <label for="<?php echo esc_attr($this->get_field_id('name')); ?>">
-                    Campaign Name
-                    <small>
-                        (optioal, if this is left out, then all campaigns will show, one at a time)
-                    </small>
-                </label>
-                <input
-                    name="<?php echo esc_attr($this->get_field_name('name')); ?>"
-                    id="<?php echo esc_attr($this->get_field_id('name')); ?>"
-                    class="widefat"
-                    type="text"
-                    value="<?php echo esc_attr($name); ?>">
-            </p>
-        <?php
-}
+?>
+        <p>
+            <label for="<?php echo esc_attr($this->get_field_id('name')); ?>">
+                Campaign Name
+                <small>
+                    (optioal, if this is left out, then all campaigns will show, one at a time)
+                </small>
+            </label>
+            <input name="<?php echo esc_attr($this->get_field_name('name')); ?>" id="<?php echo esc_attr($this->get_field_id('name')); ?>" class="widefat" type="text" value="<?php echo esc_attr($name); ?>">
+        </p>
+<?php
+    }
 
     // Updating widget replacing old instances with new
     public function update($new_instance, $old_instance)
@@ -82,12 +77,4 @@ class AAD_widget extends WP_Widget
     }
 
     // Class AAD_widget ends here
-}
-
-/**
- * Loads the widget
- */
-function load_widget()
-{
-    return register_widget('AAD_widget');
 }
