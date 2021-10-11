@@ -12,8 +12,8 @@
  * description: A plugin for managing & displaying adbirt ads on a wordpress site. See https://adbirt.com/privacy & https://adbirt.com/terms for TAC/privacy policy.
  * Version: 1.0.0
  * Tags: Adbirt, Advertisment, CPC, CPA, CPM
- * Requires at least: 5.0
- * Tested up to: 5.4
+ * Requires at least: 5.0.0
+ * Tested up to: 5.8.1
  * Requires PHP: 7.0
  * Plugin Slug: adbirt-ads-display
  * Stable tag: 1.0.0
@@ -27,7 +27,7 @@
 
 /**
  * @package adbirt-ads-display
- * @version 1.4.0
+ * @version 1.0.0
  */
 
 

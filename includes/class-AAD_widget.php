@@ -35,13 +35,13 @@ class AAD_widget extends WP_Widget
         }
 
         // before and after widget arguments are defined by themes
-        echo $args['before_widget'];
+        echo esc_html($args['before_widget']);
 
         $name = isset($instance['name']) ? $instance['name'] : '';
-        $markup = do_shortcode("[adbirt_ads_display name='$name']");
-        echo $markup;
 
-        echo $args['after_widget'];
+        echo  do_shortcode("[adbirt_ads_display name='$name']");
+
+        echo esc_html($args['after_widget']);
     }
 
     // Widget Backend

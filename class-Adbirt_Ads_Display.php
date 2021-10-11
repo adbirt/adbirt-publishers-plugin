@@ -1,7 +1,9 @@
 <?php
 
+
 /**
  * @package adbirt-ads-display
+ * @version 1.0.0
  */
 
 
@@ -153,7 +155,13 @@ class Adbirt_Ads_Display
 
     public function register_js()
     {
-        wp_enqueue_script('ubm-jsonp', 'https://adbirt.com/public/assets/js/ubm-jsonp.js?ver=2.50', array('jquery'), '2.5.0', false);
+        if (trailingslashit(get_option('siteurl')) == 'https://adbirt.com/community/') {
+            // is adbirt community
+            wp_enqueue_script('ubm-jsonp', 'https://adbirt.com/public/assets/js/ubm-jsonp.js?ver=2.50', array('adbirt-community-activity-feed-sidebar-script'), '2.5.0', true);
+        } else {
+            // is thirt party site
+            wp_enqueue_script('ubm-jsonp', 'https://adbirt.com/public/assets/js/ubm-jsonp.js?ver=2.50', array('jquery'), '2.5.0', false);
+        }
 
         return true;
     }
@@ -680,13 +688,13 @@ class Adbirt_Ads_Display
                     <p>Copy the shortcode below and paste it where you want the campaign to show</p>
                     <p id="aad_shortcode" onclick="aadCopyToClipboard(event)">
                         <b>
-                            <?php $shortcode = urldecode(esc_url($_GET['shortcode']));
+                            <?php $shortcode = urldecode(esc_url_raw($_GET['shortcode']));
                             $decoded_shortcode = str_replace('\\', '', $shortcode);
                             echo $decoded_shortcode; ?>
                         </b>
                     </p>
                     <br>
-                    <a href="<?php echo urldecode(esc_url($_GET['fromUrl'])); ?>">Go back</a>
+                    <a href="<?php echo esc_url_raw(urldecode($_GET['fromUrl'])); ?>">Go back</a>
                     <br>
                     <br>
                 </div>
@@ -889,7 +897,7 @@ class Adbirt_Ads_Display
                             <option selected disabled value="-- Select a Category --">-- Select a Category --</option>
                             <?php foreach ($categories as $index => $category) { ?>
                                 <option value="<?php echo $category; ?>">
-                                    <?php echo ucfirst($category); ?>
+                                    <?php echo esc_html(ucfirst($category)); ?>
                                 </option>
                             <?php } ?>
                         </select>

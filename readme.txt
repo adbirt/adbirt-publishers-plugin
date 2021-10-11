@@ -3,8 +3,8 @@ Plugin Name: Adbirt Ads Display
 Plugin URI: https://github.com/adbirt/adbirt-ads-display
 Contributors: adbirt
 Tags: Adbirt, Advertisment, CPC, CPA, CPM
-Requires at least: 5.0
-Tested up to: 5.4
+Requires at least: 5.0.0
+Tested up to: 5.8.1
 Requires PHP: 7.0
 Stable tag: 1.0.0
 License: GPLv2 or later
