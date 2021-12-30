@@ -148,26 +148,29 @@ class Adbirt_Ads_Display
 
     public function register_css()
     {
-        wp_enqueue_style('ubm-css', 'https://adbirt.com/public/assets/css/ubm.css?ver=2.50', false, '2.5.0', 'all');
+        wp_enqueue_style('ubm-css', 'https://adbirt.com/public/assets/css/ubm.css?ver=2.60', false, '2.5.0', 'all');
 
         return true;
     }
 
     public function register_js()
     {
+        $url = 'https://adbirt.com/public/assets/js/ubm-jsonp.js?ver=2.60';
+
         if (trailingslashit(get_option('siteurl')) == 'https://adbirt.com/community/') {
             // is adbirt community
-            wp_enqueue_script('ubm-jsonp', 'https://adbirt.com/public/assets/js/ubm-jsonp.js?ver=2.50', array('adbirt-community-activity-feed-sidebar-script'), '2.5.0', true);
+            // wp_enqueue_script('adbirt-publisher', $url, array('adbirt-community-activity-feed-sidebar-script'), '2.5.0', true);
+            wp_enqueue_script('adbirt-publisher', $url, array('jquery'), '2.6.0', true);
         } else {
-            // is thirt party site
-            wp_enqueue_script('ubm-jsonp', 'https://adbirt.com/public/assets/js/ubm-jsonp.js?ver=2.50', array('jquery'), '2.5.0', false);
+            // is third party site
+            wp_enqueue_script('adbirt-publisher', $url, array('jquery'), '2.6.0', true);
         }
 
         return true;
     }
 
     /**
-     * Register cusston HTTP REST routes for this plugin
+     * Register custom HTTP REST routes for this plugin
      */
     public function register_custom_REST_routes()
     {
@@ -196,7 +199,6 @@ class Adbirt_Ads_Display
      */
     public function add_category_endpoint(WP_REST_Request $request)
     {
-
         global $default_config;
 
         $params = $request->get_body_params();
