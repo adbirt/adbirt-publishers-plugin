@@ -1,12 +1,12 @@
-=== Adbirt Ads Display ===
-Plugin Name: Adbirt Ads Display
+=== Adbirt Publisher ===
+Plugin Name: Adbirt Publisher
 Plugin URI: https://github.com/adbirt/adbirt-ads-display
 Contributors: adbirt
 Tags: Adbirt, Advertisment, CPC, CPA, CPM
 Requires at least: 5.0.0
 Tested up to: 5.8.1
 Requires PHP: 7.0
-Stable tag: 1.0.0
+Stable tag: 1.2.0
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 

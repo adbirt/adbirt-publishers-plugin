@@ -3,7 +3,7 @@
 
 /**
  * @package adbirt-ads-display
- * @version 1.0.0
+ * @version 1.2.0
  */
 
 
@@ -148,19 +148,19 @@ class Adbirt_Ads_Display
 
     public function register_css()
     {
-        wp_enqueue_style('ubm-css', 'https://adbirt.com/public/assets/css/ubm.css?ver=2.60', false, '2.5.0', 'all');
+        // wp_enqueue_style('ubm-css', 'https://adbirt.com/public/assets/css/ubm.css?ver=2.60', false, '2.5.0', 'all');
 
         return true;
     }
 
     public function register_js()
     {
-        $url = 'https://adbirt.com/public/assets/js/ubm-jsonp.js?ver=2.60';
+        $url = 'https://adbirt.com/public/assets/js/ubm-jsonp.js?ver=2.70';
 
         if (trailingslashit(get_option('siteurl')) == 'https://adbirt.com/community/') {
             // is adbirt community
-            // wp_enqueue_script('adbirt-publisher', $url, array('adbirt-community-activity-feed-sidebar-script'), '2.5.0', true);
-            wp_enqueue_script('adbirt-publisher', $url, array('jquery'), '2.6.0', true);
+            wp_enqueue_script('adbirt-publisher', $url, array('adbirt-community-activity-feed-sidebar-script'), '2.5.0', true);
+            // wp_enqueue_script('adbirt-publisher', $url, array('jquery'), '2.6.0', true);
         } else {
             // is third party site
             wp_enqueue_script('adbirt-publisher', $url, array('jquery'), '2.6.0', true);
@@ -331,10 +331,12 @@ class Adbirt_Ads_Display
     {
         global $default_config, $default_ad;
 
+        $default_interval = 5;
+
         $attrs = shortcode_atts(
             array(
                 'name' => '',
-                'interval' => '10',
+                'interval' => "$default_interval",
                 'category' => '',
             ),
             $attributes
@@ -344,7 +346,7 @@ class Adbirt_Ads_Display
         $ads = $config['ads'] ?? array();
         $name = $attrs['name'];
         $category = isset($attrs['category']) ? $attrs['category'] : '';
-        $interval = isset($attrs['interval']) ? intval($attrs['interval']) : 5;
+        $interval = isset($attrs['interval']) ? intval($attrs['interval']) : $default_interval;
 
         $markup = '';
         $local_id = 'aad_' . $this->generate_random_string();
