@@ -1,17 +1,31 @@
+/**
+ * Adbirt publisher script
+ */
 (() => {
     try {
         let iter_index = 0;
         let payload = "";
 
-        const ubm_tmp_banners = Array.from(document.querySelectorAll("a.ubm-banner"));
+        const ubm_banners = Array.from(document.querySelectorAll("a.ubm-banner"));
+        console.log('ubm_banners: ', ubm_banners);
 
         iter_index = 0;
-        for (const banner of ubm_tmp_banners) {
-            let id = String(banner.dataset.id);
+        for (const banner of ubm_banners) {
+            let bannerCode = String(banner.dataset.id);
+
+            let campaignType = String(banner.dataset.type) || 'CPA';
+            let nativeType = String(banner.dataset.native); // 'native', 'feed'
+
             banner.id = `ubm_${iter_index}`;
-            payload += `${id}:`;
+            payload += `${JSON.stringify({
+                bannerCode,
+                nativeType
+            })}-sep-`;
             iter_index++;
         }
+
+        console.log('payload: ', payload);
+
         if (iter_index > 0) {
             fetch("https://www.adbirt.com/ubm_getbanner", {
                 method: "POST",
@@ -31,12 +45,12 @@
                     for (const banner of banners) {
                         // console.log(banner.trim());
                         if (banner && (typeof banner == 'string') && banner.length && (banner.match("ubm_banner") != null)) {
+                            const tmpDiv = document.createElement("div");
                             Array.from(document.querySelectorAll("#ubm_" + iter_index)).forEach(item => {
-                                const tmpDiv = document.createElement("div");
                                 tmpDiv.innerHTML = banner.trim();
-                                item.replaceWith(tmpDiv.firstChild);
-                                tmpDiv.remove();
+                                item.replaceWith(tmpDiv.firstElementChild);
                             });
+                            tmpDiv.remove();
                         }
                         iter_index++;
                     }

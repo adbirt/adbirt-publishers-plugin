@@ -1,0 +1,17 @@
+.wrap,
+.wpbody-content {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.wrap {
+    margin: 0px !important;
+}
+
+.flex-container {
+    display: flex;
+}
+
+* {
+    scroll-behavior: smooth !important;
+}

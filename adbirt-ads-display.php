@@ -31,9 +31,9 @@
  */
 
 
-$main_class_path = trailingslashit(plugin_dir_path(__FILE__)) . 'class-Adbirt_Ads_Display.php';
+$main_class_path = trailingslashit(plugin_dir_path(__FILE__)) . 'class-Adbirt_Publisher.php';
 require $main_class_path;
 
-new Adbirt_Ads_Display();
+new Adbirt_Publisher();
 
 // completed
