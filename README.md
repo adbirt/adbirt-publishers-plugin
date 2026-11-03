@@ -22,3 +22,9 @@ comment for editors).
 docker run --rm -v "$PWD":/plugin:ro -w /plugin wordpress:php8.3-apache \
   sh -c 'for f in $(find . -name "*.php" -not -path "./.git/*"); do php -l "$f"; done'
 ```
+
+Smoke-tested on WordPress 7.1.2 (PHP 8.3, Docker `wordpress:php8.3-apache` +
+`mariadb:11`) against a local Adbirt backend: shortcode and block slots both
+rendered and reported one viewable impression each; the legacy shortcode
+rendered nothing; the settings page saved and rendered. Commands and output:
+`adbirt-dsp-backend`, `main-backend/docs/publisher-serving.md`.
