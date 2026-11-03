@@ -1,336 +1,254 @@
 <?php
 
 /**
+ * Adbirt Publisher: places Adbirt ad slots on the site and loads the Adbirt
+ * publisher script (https://dsp.adbirt.com/publisher.js), which fills them.
+ *
+ * Sites and slots are created in the Adbirt dashboard (Publisher section);
+ * each slot has a public id such as slot_0123456789abcdef01234567. Ads are
+ * served only on the verified domain, so nothing here is secret.
+ *
  * @package adbirt-ads-display
- * @version 1.2.0
  */
 
-// require the widget class before anything else
-$widget_file_path = trailingslashit(plugin_dir_path(__FILE__)) . 'includes/class-AAD_widget.php';
-require $widget_file_path;
+if (!defined('ABSPATH')) {
+    exit;
+}
 
-/**
- * The main class for handling the
- * creation and insertion of adbirt ads.
- */
 class Adbirt_Publisher
 {
-    public function __construct()
+    const OPTION = 'adbirt_publisher_settings';
+    const DEFAULT_SCRIPT_URL = 'https://dsp.adbirt.com/publisher.js';
+    const SCRIPT_HANDLE = 'adbirt-publisher';
+    const SLOT_PATTERN = '/^slot_[a-f0-9]{24}$/';
+
+    /** @var Adbirt_Publisher|null */
+    private static $instance = null;
+
+    /** @var bool */
+    private $script_needed = false;
+
+    public static function instance()
     {
-        add_action('rest_api_init', array($this, 'register_custom_REST_routes'));
-        add_action('widgets_init', array($this, 'load_widget'));
-        add_action('admin_menu', array($this, 'admin_sidebar_item'));
-
-        add_filter('plugin_action_links', array($this, 'settings_hook'), 10, 1);
-        add_filter('wp_enqueue_scripts', array($this, 'register_css_and_js'));
-
-        add_shortcode('adbirt_ads_display', array($this, 'adbirt_ads_display_shortcode'));
-
-        register_activation_hook(__FILE__, array($this, 'activate'));
-        register_deactivation_hook(__FILE__, array($this, 'deactivate'));
-    }
-
-
-    /**
-     * Generates a unique random alpha-numeric string.
-     * The string is always unique because it also includes the current unix timestamp 
-     * ```php
-     * time()
-     * ```
-     */
-    public function generate_random_string($length = 5)
-    {
-        $characters = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
-        $charactersLength = strlen($characters);
-
-        $randomString = '';
-
-        for ($i = 0; $i < $length; $i++) {
-            $randomString .= $characters[rand(0, $charactersLength - 1)];
+        if (self::$instance === null) {
+            self::$instance = new self();
         }
+        return self::$instance;
+    }
 
-        return $randomString . '_' . time();
+    private function __construct()
+    {
+        add_shortcode('adbirt_slot', array($this, 'slot_shortcode'));
+        // The 1.x shortcode called adbirt.com endpoints that no longer exist.
+        // Keep it registered so old posts do not show raw shortcode text.
+        add_shortcode('adbirt_ads_display', array($this, 'legacy_shortcode'));
+        add_action('init', array($this, 'register_block'));
+        add_action('widgets_init', array($this, 'register_widget'));
+        add_action('wp_enqueue_scripts', array($this, 'register_script'));
+        add_action('wp_footer', array($this, 'enqueue_script_if_needed'), 1);
+        add_filter('script_loader_tag', array($this, 'script_tag_attributes'), 10, 2);
+        add_action('admin_menu', array($this, 'admin_menu'));
+        add_action('admin_init', array($this, 'register_settings'));
+        add_filter('plugin_action_links_' . plugin_basename(ADBIRT_PUBLISHER_FILE), array($this, 'settings_link'));
+    }
+
+    /** @return array{site_id:string,script_url:string,api_base:string} */
+    public static function settings()
+    {
+        $saved = get_option(self::OPTION, array());
+        $saved = is_array($saved) ? $saved : array();
+        return array(
+            'site_id' => isset($saved['site_id']) ? (string) $saved['site_id'] : '',
+            'script_url' => !empty($saved['script_url']) ? (string) $saved['script_url'] : self::DEFAULT_SCRIPT_URL,
+            'api_base' => isset($saved['api_base']) ? (string) $saved['api_base'] : '',
+        );
+    }
+
+    public static function is_slot_id($value)
+    {
+        return is_string($value) && preg_match(self::SLOT_PATTERN, $value) === 1;
     }
 
     /**
-     * Loads the widget
+     * Markup for one slot. The publisher script finds it, asks Adbirt for an
+     * ad when it nears the viewport, and collapses it when there is none.
      */
-    public function load_widget()
+    public function slot_markup($slot_id, $extra_class = '')
     {
-        return register_widget('AAD_widget');
-    }
-
-    public function activate()
-    {
-        return true;
-    }
-
-    public function deactivate()
-    {
-
-        $menu_slug = 'adbirt-publisher';
-
-        /**
-         * Removes Adbirt Admin page from wp-admin menu
-         */
-        remove_menu_page($menu_slug);
-
-        return true;
-    }
-
-    /**
-     * This function retrives campaign categories from adbirt.com backend
-     */
-    public function get_categories()
-    {
-        $categories = array();
-
-        if (get_transient('adbirt_campaign_categories') == false) {
-            // not in cache
-            $response = wp_safe_remote_get('https://adbirt.com/campaigns/get-campaign-categories-as-json');
-            $body = json_decode($response['body'], true);
-
-            if (intval($body['status']) == 200) {
-                $categories = $body['categories'];
-
-                set_transient('adbirt_campaign_categories', $categories, 5 * MINUTE_IN_SECONDS);
+        $slot_id = trim((string) $slot_id);
+        if (!self::is_slot_id($slot_id)) {
+            if (current_user_can('edit_posts')) {
+                return '<!-- Adbirt: "' . esc_html($slot_id) . '" is not a slot id. Copy it from the Publisher section of your Adbirt dashboard. -->';
             }
-        } else {
-            // already in cache
-            $categories = get_transient('adbirt_campaign_categories');
+            return '';
         }
-
-        return $categories;
+        $this->script_needed = true;
+        $classes = trim('adbirt-slot ' . $extra_class);
+        return sprintf(
+            '<ins class="%s" data-slot="%s" style="display:block"></ins>',
+            esc_attr($classes),
+            esc_attr($slot_id)
+        );
     }
 
-    public function register_css_and_js()
+    /** [adbirt_slot id="slot_..."] */
+    public function slot_shortcode($attributes = array())
     {
-        $this->register_css();
-        $this->register_js();
-
-        return true;
+        $attributes = shortcode_atts(array('id' => '', 'class' => ''), $attributes, 'adbirt_slot');
+        return $this->slot_markup($attributes['id'], sanitize_html_class($attributes['class']));
     }
 
-    public function register_css()
+    public function legacy_shortcode()
     {
-        // wp_enqueue_style('ubm-css', 'https://adbirt.com/public/assets/css/ubm.css?ver=2.60', false, '2.5.0', 'all');
-
-        return true;
+        if (current_user_can('edit_posts')) {
+            return '<!-- Adbirt: [adbirt_ads_display] is retired. Replace it with [adbirt_slot id="..."] using a slot id from your Adbirt dashboard. -->';
+        }
+        return '';
     }
 
-    public function register_js()
+    public function register_block()
     {
-        $url = 'https://adbirt.com/public/assets/js/ubm-jsonp.js?ver=2.70';
-
-        wp_enqueue_script('adbirt-publisher', $url, array('jquery'), '2.6.0', true);
-
-        return true;
+        if (!function_exists('register_block_type')) {
+            return;
+        }
+        wp_register_script(
+            'adbirt-slot-block-editor',
+            plugins_url('blocks/slot/editor.js', ADBIRT_PUBLISHER_FILE),
+            array('wp-blocks', 'wp-element', 'wp-block-editor', 'wp-components', 'wp-i18n'),
+            ADBIRT_PUBLISHER_VERSION,
+            true
+        );
+        register_block_type(ADBIRT_PUBLISHER_DIR . 'blocks/slot', array(
+            'editor_script' => 'adbirt-slot-block-editor',
+            'render_callback' => array($this, 'render_block'),
+        ));
     }
 
-    /**
-     * Register custom HTTP REST routes for this plugin
-     */
-    public function register_custom_REST_routes()
+    public function render_block($attributes)
     {
-        // register_rest_route('wp/v2', 'adbirt-ads-display', array(
-        //     'methods' => 'POST',
-        //     'callback' => array($this, 'api_endpoint'),
-        //     'permission_callback' => '__return_true',
-        // ));
+        $slot_id = isset($attributes['slotId']) ? $attributes['slotId'] : '';
+        return $this->slot_markup($slot_id);
     }
 
-    public function settings_hook($links)
+    public function register_widget()
     {
+        register_widget('AAD_widget');
+    }
 
-        // $this_plugin = false;
+    public function register_script()
+    {
+        $settings = self::settings();
+        wp_register_script(self::SCRIPT_HANDLE, esc_url_raw($settings['script_url']), array(), null, true);
+    }
 
-        // if (!$this_plugin) {
-        //     $this_plugin = plugin_basename(__FILE__);
-        // }
+    /** The script loads once per page, and only on pages that have a slot. */
+    public function enqueue_script_if_needed()
+    {
+        if ($this->script_needed) {
+            wp_enqueue_script(self::SCRIPT_HANDLE);
+        }
+    }
 
-        // if (isset($file) && ($file == $this_plugin)) {
+    public function script_tag_attributes($tag, $handle)
+    {
+        if ($handle !== self::SCRIPT_HANDLE) {
+            return $tag;
+        }
+        $settings = self::settings();
+        $extra = ' async';
+        if ($settings['api_base'] !== '') {
+            $extra .= ' data-api="' . esc_attr($settings['api_base']) . '"';
+        }
+        return preg_replace('/<script\b/', '<script' . $extra, $tag, 1);
+    }
 
-        //     $settings_link = '<a href="' . get_bloginfo('wpurl') . '/wp-admin/admin.php?page=adbirt-ads-display">Settings</a>';
-        //     array_unshift($links, $settings_link);
-        // }
+    public function admin_menu()
+    {
+        add_options_page(
+            __('Adbirt Publisher', 'adbirt-ads-display'),
+            __('Adbirt Publisher', 'adbirt-ads-display'),
+            'manage_options',
+            'adbirt-publisher',
+            array($this, 'settings_page')
+        );
+    }
 
+    public function register_settings()
+    {
+        register_setting('adbirt_publisher', self::OPTION, array(
+            'type' => 'array',
+            'sanitize_callback' => array($this, 'sanitize_settings'),
+            'default' => array(),
+        ));
+    }
+
+    public function sanitize_settings($input)
+    {
+        $input = is_array($input) ? $input : array();
+        $clean = array();
+        $site_id = isset($input['site_id']) ? sanitize_text_field($input['site_id']) : '';
+        $clean['site_id'] = preg_match('/^[a-f0-9]{24}$/', $site_id) ? $site_id : '';
+        if ($site_id !== '' && $clean['site_id'] === '') {
+            add_settings_error(self::OPTION, 'site_id', __('The site id is the 24-character id shown for your site in the Adbirt dashboard.', 'adbirt-ads-display'));
+        }
+        $script_url = isset($input['script_url']) ? esc_url_raw(trim($input['script_url']), array('https', 'http')) : '';
+        $clean['script_url'] = $script_url !== '' ? $script_url : self::DEFAULT_SCRIPT_URL;
+        $api_base = isset($input['api_base']) ? esc_url_raw(trim($input['api_base']), array('https', 'http')) : '';
+        $clean['api_base'] = untrailingslashit($api_base);
+        return $clean;
+    }
+
+    public function settings_link($links)
+    {
+        $url = admin_url('options-general.php?page=adbirt-publisher');
+        array_unshift($links, '<a href="' . esc_url($url) . '">' . esc_html__('Settings', 'adbirt-ads-display') . '</a>');
         return $links;
     }
 
-    /**
-     * @param {array} attributes = { name: string, id: string, code: string, interval: string }
-     * @param {?string} content
-     */
-    public function adbirt_ads_display_shortcode($attributes = array(), $content = '')
+    public function settings_page()
     {
-        global $default_config, $default_ad;
-
-        $default_interval = 5;
-
-        $attrs = shortcode_atts(
-            array(
-                'name' => '',
-                'interval' => "$default_interval",
-                'category' => '',
-            ),
-            $attributes
-        );
-
-        $config = json_decode(get_option('adbirt_ads_display', json_encode($default_config)), true);
-        $ads = $config['ads'] ?? array();
-        $name = $attrs['name'];
-        $category = isset($attrs['category']) ? $attrs['category'] : '';
-        $interval = isset($attrs['interval']) ? intval($attrs['interval']) : $default_interval;
-
-        $markup = '';
-        $local_id = 'aad_' . $this->generate_random_string();
-
-        if ($name === '' && is_numeric($interval)) {
-
-            ob_start();
-?>
-
-            <span id="<?php echo esc_attr($local_id); ?>">
-                <style id="<?php echo esc_attr($local_id); ?>_style">
-                    span#<?php echo esc_html($local_id); ?>>a {
-                        display: none;
-                        visibility: hidden;
-                    }
-                </style>
-                <?php foreach ($ads as $ad) {
-                    if ($ad['status'] === 'Published') {
-                        if ($category !== '') {
-                            if (strtolower($ad['category']) === strtolower($category)) {
-                                $_local_markup = $ad['code'];
-                                echo $_local_markup;
-                                // consider ☝️
-                            } else {
-                                break;
-                            }
-                        } else {
-                            $_local_markup = $ad['code'];
-                            echo $_local_markup;
-                            // consider ☝️
-                        }
-                    }
-                } ?>
-                <script id="<?php echo esc_attr($local_id); ?>_script">
-                    (() => {
-
-                        const widths = [];
-                        const heights = [];
-
-                        const showAds = async () => {
-                            const id = `<?php echo $local_id; ?>`.trim();
-                            const ads = <?php echo json_encode($ads) ?>;
-                            const interval = <?php echo intval(esc_attr($interval)); ?>;
-                            const category = `<?php echo $category; ?>`;
-
-                            let index = 0;
-                            while (true) {
-
-                                const selector = `span#<?php echo esc_attr($local_id); ?> > a.ubm_banner`;
-                                const ad_elems = Array.from(document.querySelectorAll(selector));
-
-                                if (ad_elems.length === 0) {
-                                    await new Promise(resolve => setTimeout(resolve, 0.5 * 1000));
-                                    continue;
-                                }
-
-                                if ((widths.length < ads.length) && (heights.length < ads.length)) {
-                                    ad_elems.forEach(elem => {
-                                        widths.push(elem.style.width);
-                                        heights.push(elem.style.height);
-                                    });
-                                }
-
-                                // console.log('showing ad at index: ', index);
-                                const ad = ads[index];
-                                const ad_elem = ad_elems[index];
-
-                                ad_elems.forEach(elem => {
-                                    elem.style.visibility = 'hidden';
-                                    elem.style.display = 'none';
-                                    elem.style.width = '0px';
-                                    elem.style.height = '0px';
-                                });
-
-                                ad_elem.style.visibility = 'visible';
-                                ad_elem.style.display = 'block';
-                                ad_elem.style.width = widths[index];
-                                ad_elem.style.height = heights[index];
-
-                                // console.log('current ad element is ', ad_elem);
-
-                                await new Promise(resolve => setTimeout(resolve, interval * 1000));
-
-                                if ((index + 1) == ads.length) {
-                                    index = 0;
-                                } else {
-                                    ++index;
-                                }
-                            }
-                        };
-
-                        setTimeout(() => showAds(), 1000);
-                    })();
-                </script>
-            </span>
-
-            <?php
-            $markup = ob_get_clean();
-        } else if ($name !== '') {
-            $single_ad = array();
-
-            if (sizeof($ads) > 0) {
-                foreach ($ads as $ad) {
-                    if ($ad['name'] === $name) {
-                        $single_ad = $ad;
-                        break;
-                    }
-                }
-            } else {
-                $single_ad = $default_ad;
-            }
-
-            ob_start();
-            if (isset($single_ad['status']) && ($single_ad['status'] === 'Published')) {
-                echo $single_ad['code'];
-            } else {
-            ?>
-                <!-- Draft: <?php
-                            // echo $single_ad['code'];
-                            ?> -->
-<?php
-            }
-            $markup = ob_get_clean();
+        if (!current_user_can('manage_options')) {
+            return;
         }
-
-        return $markup;
-    }
-
-    public function admin_sidebar_item()
-    {
-        $page_title = 'Adbirt Publisher Dashboard';
-        $menu_slug = 'adbirt-publisher';
-        $capability = 'edit_pages';
-        $render_function = array($this, 'adbirt_publisher_page_content');
-        $icon = 'https://adbirt.com/public/assets-revamp/img/favicon.png';
-
-        add_menu_page($page_title, $page_title, $capability, $menu_slug, $render_function, $icon, 3);
-        add_submenu_page($menu_slug, $page_title, $page_title, $capability, $menu_slug, $render_function);
-        add_options_page($page_title, $page_title, $capability, $menu_slug, $render_function);
-
-        return true;
-    }
-
-    public function getCategoryNameFromId(array $categories, ?string $search)
-    {
-        require(plugin_dir_path(__FILE__) . 'modules/get-categories-by-id.php');
-    }
-
-    public function adbirt_publisher_page_content()
-    {
-        require(plugin_dir_path(__FILE__) . 'modules/adbirt-publisher-page-content.php');
+        $settings = self::settings();
+        $name = esc_attr(self::OPTION);
+        ?>
+        <div class="wrap">
+            <h1><?php esc_html_e('Adbirt Publisher', 'adbirt-ads-display'); ?></h1>
+            <p><?php esc_html_e('Show Adbirt ads on this site. In your Adbirt dashboard, open Publisher, add and verify this site, then create ad slots.', 'adbirt-ads-display'); ?></p>
+            <ol>
+                <li><?php esc_html_e('Add a slot anywhere with the shortcode', 'adbirt-ads-display'); ?> <code>[adbirt_slot id="slot_..."]</code></li>
+                <li><?php esc_html_e('or the "Adbirt Ad Slot" block in the editor,', 'adbirt-ads-display'); ?></li>
+                <li><?php esc_html_e('or the "Adbirt Ad Slot" widget in Appearance > Widgets.', 'adbirt-ads-display'); ?></li>
+            </ol>
+            <form method="post" action="options.php">
+                <?php settings_fields('adbirt_publisher'); ?>
+                <table class="form-table" role="presentation">
+                    <tr>
+                        <th scope="row"><label for="adbirt-site-id"><?php esc_html_e('Publisher site id', 'adbirt-ads-display'); ?></label></th>
+                        <td>
+                            <input name="<?php echo $name; ?>[site_id]" id="adbirt-site-id" type="text" class="regular-text code" value="<?php echo esc_attr($settings['site_id']); ?>" pattern="[a-f0-9]{24}" aria-describedby="adbirt-site-id-help">
+                            <p class="description" id="adbirt-site-id-help"><?php esc_html_e('Optional. The id of this site in your Adbirt dashboard, for your reference. Ads are served by slot id.', 'adbirt-ads-display'); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="adbirt-script-url"><?php esc_html_e('Script URL', 'adbirt-ads-display'); ?></label></th>
+                        <td>
+                            <input name="<?php echo $name; ?>[script_url]" id="adbirt-script-url" type="url" class="regular-text code" value="<?php echo esc_attr($settings['script_url']); ?>" aria-describedby="adbirt-script-url-help">
+                            <p class="description" id="adbirt-script-url-help"><?php echo esc_html(sprintf(__('Leave as %s unless Adbirt support asks you to change it.', 'adbirt-ads-display'), self::DEFAULT_SCRIPT_URL)); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="adbirt-api-base"><?php esc_html_e('Ad server (advanced)', 'adbirt-ads-display'); ?></label></th>
+                        <td>
+                            <input name="<?php echo $name; ?>[api_base]" id="adbirt-api-base" type="url" class="regular-text code" value="<?php echo esc_attr($settings['api_base']); ?>" aria-describedby="adbirt-api-base-help">
+                            <p class="description" id="adbirt-api-base-help"><?php esc_html_e('Empty: the server the script is loaded from. Only for testing.', 'adbirt-ads-display'); ?></p>
+                        </td>
+                    </tr>
+                </table>
+                <?php submit_button(); ?>
+            </form>
+        </div>
+        <?php
     }
 }

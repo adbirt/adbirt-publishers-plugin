@@ -1,80 +1,67 @@
 <?php
 
 /**
+ * Widget: one Adbirt ad slot in a sidebar or footer.
+ *
+ * Keeps the 1.x widget base id (AAD_widget) so existing widget areas keep
+ * the widget; it now needs a slot id instead of a campaign name.
+ *
  * @package adbirt-ads-display
  */
 
-/**
- * Creates the widget
- */
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 class AAD_widget extends WP_Widget
 {
-
-    // The construct part
     public function __construct()
     {
         parent::__construct(
-            // Base ID of your widget
             'AAD_widget',
-            // Widget name will appear in UI
-            __('Adbirt Ads display widget', 'adbirt-ads-display'),
-            // Widget description
-            array('description' => __('Insert Abirt ads in your widget area', 'adbirt-ads-display'))
+            __('Adbirt Ad Slot', 'adbirt-ads-display'),
+            array('description' => __('Shows ads from one Adbirt ad slot.', 'adbirt-ads-display'))
         );
     }
 
-    // Creating widget front-end
     public function widget($args, $instance)
     {
-
-        $name = '';
-        if (isset($instance['name'])) {
-            $name = $instance['name'];
-        } else {
-            $name = $instance['name'] = '';
+        $slot_id = isset($instance['slot_id']) ? $instance['slot_id'] : '';
+        $markup = Adbirt_Publisher::instance()->slot_markup($slot_id);
+        if ($markup === '') {
+            return;
         }
-
-        // before and after widget arguments are defined by themes
         echo $args['before_widget'];
-
-        $name = isset($instance['name']) ? $instance['name'] : '';
-
-        echo do_shortcode("[adbirt_ads_display name='$name']");
-
+        if (!empty($instance['title'])) {
+            echo $args['before_title'] . esc_html(apply_filters('widget_title', $instance['title'])) . $args['after_title'];
+        }
+        echo $markup; // Built from a validated slot id with esc_attr.
         echo $args['after_widget'];
     }
 
-    // Widget Backend
     public function form($instance)
     {
-        $name = '';
-        if (isset($instance['name'])) {
-            $name = $instance['name'];
-        } else {
-            $name = $instance['name'] = '';
-        }
-        // Widget admin form
-?>
+        $title = isset($instance['title']) ? $instance['title'] : '';
+        $slot_id = isset($instance['slot_id']) ? $instance['slot_id'] : '';
+        ?>
         <p>
-            <label for="<?php echo esc_attr($this->get_field_id('name')); ?>">
-                Campaign Name
-                <small>
-                    (optioal, if this is left out, then all campaigns will show, one at a time)
-                </small>
-            </label>
-            <input name="<?php echo esc_attr($this->get_field_name('name')); ?>" id="<?php echo esc_attr($this->get_field_id('name')); ?>" class="widefat" type="text" value="<?php echo esc_attr($name); ?>">
+            <label for="<?php echo esc_attr($this->get_field_id('title')); ?>"><?php esc_html_e('Title (optional)', 'adbirt-ads-display'); ?></label>
+            <input class="widefat" id="<?php echo esc_attr($this->get_field_id('title')); ?>" name="<?php echo esc_attr($this->get_field_name('title')); ?>" type="text" value="<?php echo esc_attr($title); ?>">
         </p>
-<?php
+        <p>
+            <label for="<?php echo esc_attr($this->get_field_id('slot_id')); ?>"><?php esc_html_e('Slot id', 'adbirt-ads-display'); ?></label>
+            <input class="widefat code" id="<?php echo esc_attr($this->get_field_id('slot_id')); ?>" name="<?php echo esc_attr($this->get_field_name('slot_id')); ?>" type="text" value="<?php echo esc_attr($slot_id); ?>" placeholder="slot_...">
+            <small><?php esc_html_e('From the Publisher section of your Adbirt dashboard.', 'adbirt-ads-display'); ?></small>
+        </p>
+        <?php
     }
 
-    // Updating widget replacing old instances with new
     public function update($new_instance, $old_instance)
     {
-        $instance = array();
-        $instance['name'] = (!empty($new_instance['name'])) ? strip_tags($new_instance['name']) : strip_tags($old_instance['name'] ?? '');
-
-        return $instance;
+        $slot_id = isset($new_instance['slot_id']) ? sanitize_text_field($new_instance['slot_id']) : '';
+        return array(
+            'title' => isset($new_instance['title']) ? sanitize_text_field($new_instance['title']) : '',
+            'slot_id' => Adbirt_Publisher::is_slot_id($slot_id) ? $slot_id : '',
+        );
     }
-
-    // Class AAD_widget ends here
 }

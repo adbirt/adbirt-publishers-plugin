@@ -1,0 +1,15 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 2,
+  "name": "adbirt/slot",
+  "title": "Adbirt Ad Slot",
+  "category": "widgets",
+  "icon": "megaphone",
+  "description": "Shows ads from one of your Adbirt ad slots.",
+  "keywords": ["adbirt", "ad", "advert"],
+  "textdomain": "adbirt-ads-display",
+  "attributes": {
+    "slotId": { "type": "string", "default": "" }
+  },
+  "supports": { "html": false, "align": ["wide", "full", "center"] }
+}
